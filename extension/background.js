@@ -24,7 +24,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             };
 
             // Call FastAPI Backend
-            fetch("http://0.0.0.0:8000/api/nodes/", {
+            fetch("http://localhost:8000/api/nodes/", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"

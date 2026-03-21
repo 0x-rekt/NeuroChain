@@ -13,9 +13,10 @@ interface GraphCanvasProps {
   data: GraphData;
   onNodeClick?: (node: Node) => void;
   selectedNodeId?: string | null;
+  newNodeId?: string | null;
 }
 
-export default function GraphCanvas({ data, onNodeClick, selectedNodeId }: GraphCanvasProps) {
+export default function GraphCanvas({ data, onNodeClick, selectedNodeId, newNodeId }: GraphCanvasProps) {
   const graphRef = useRef<any>(null);
 
   const handleNodeClick = useCallback((node: any) => {
@@ -28,17 +29,29 @@ export default function GraphCanvas({ data, onNodeClick, selectedNodeId }: Graph
     const label = node.text;
     const fontSize = 12 / globalScale;
     const isSelected = node.id === selectedNodeId;
+    const isNew = node.id === newNodeId;
+
+    // Draw glow for new nodes
+    if (isNew) {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, 12, 0, 2 * Math.PI);
+      const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, 12);
+      gradient.addColorStop(0, 'rgba(139, 92, 246, 0.8)');
+      gradient.addColorStop(1, 'rgba(139, 92, 246, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    }
 
     // Draw node circle
     ctx.beginPath();
     ctx.arc(node.x, node.y, 5, 0, 2 * Math.PI);
-    ctx.fillStyle = isSelected ? '#3b82f6' : '#8b5cf6';
+    ctx.fillStyle = isNew ? '#a78bfa' : (isSelected ? '#3b82f6' : '#8b5cf6');
     ctx.fill();
 
-    // Draw outline if selected
-    if (isSelected) {
-      ctx.strokeStyle = '#60a5fa';
-      ctx.lineWidth = 2 / globalScale;
+    // Draw outline if selected or new
+    if (isSelected || isNew) {
+      ctx.strokeStyle = isNew ? '#a78bfa' : '#60a5fa';
+      ctx.lineWidth = isNew ? 3 / globalScale : 2 / globalScale;
       ctx.stroke();
     }
 
@@ -48,7 +61,7 @@ export default function GraphCanvas({ data, onNodeClick, selectedNodeId }: Graph
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#e5e7eb';
     ctx.fillText(label.substring(0, 30) + (label.length > 30 ? '...' : ''), node.x, node.y + 8);
-  }, [selectedNodeId]);
+  }, [selectedNodeId, newNodeId]);
 
   const paintLink = useCallback((link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const start = link.source;

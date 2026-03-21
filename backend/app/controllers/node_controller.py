@@ -22,6 +22,7 @@ from app.services.ci_service import run_ci_pipeline
 from app.config import settings
 from app.utils.time_utils import now_timestamp
 from app.utils.logger import logger
+from app.services.websocket_manager import manager
 import httpx
 
 
@@ -93,7 +94,28 @@ async def create_node_handler(text: str) -> CreateNodeResponse:
         # 5. Trigger CI pipeline asynchronously (fire-and-forget)
         asyncio.create_task(run_ci_pipeline(node.id, settings.time_decay_halflife))
 
-        # 6. Return response (exclude raw embedding for brevity)
+        # 6. Broadcast to WebSocket clients
+        await manager.broadcast({
+            "type": "node_created",
+            "node": {
+                "id": node.id,
+                "text": node.text,
+                "timestamp": node.timestamp,
+            },
+            "edges": [
+                {
+                    "source": e.source,
+                    "target": e.target,
+                    "score": e.score,
+                    "semantic": e.semantic,
+                    "keyword": e.keyword,
+                    "time": e.time,
+                }
+                for e in edges
+            ],
+        })
+
+        # 7. Return response (exclude raw embedding for brevity)
         return CreateNodeResponse(
             node=NodeResponse(
                 id=node.id,
