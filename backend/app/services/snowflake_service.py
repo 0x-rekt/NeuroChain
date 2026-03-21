@@ -1,10 +1,11 @@
 """
 Snowflake service — Database operations with async wrappers.
+FIXED: Uses Snowflake Cortex embedding function directly (like rag_service repo)
 """
 
 import asyncio
 from functools import wraps
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 import snowflake.connector
 from snowflake.connector import DictCursor
 import json
@@ -45,25 +46,25 @@ def _get_connection() -> snowflake.connector.SnowflakeConnection:
     return _connection
 
 
-def _execute_query(sql: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
+def _execute_query(sql: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Execute SQL query and return results as list of dicts."""
     conn = _get_connection()
     cursor = conn.cursor(DictCursor)
 
     try:
-        cursor.execute(sql, params or [])
+        cursor.execute(sql, params or {})
         return cursor.fetchall()
     finally:
         cursor.close()
 
 
-def _execute_non_query(sql: str, params: Optional[List[Any]] = None) -> None:
+def _execute_non_query(sql: str, params: Optional[Dict[str, Any]] = None) -> None:
     """Execute SQL command without returning results (INSERT, UPDATE, DELETE)."""
     conn = _get_connection()
     cursor = conn.cursor()
 
     try:
-        cursor.execute(sql, params or [])
+        cursor.execute(sql, params or {})
         conn.commit()
     finally:
         cursor.close()
@@ -122,17 +123,28 @@ async def initialize_tables() -> None:
 
 @async_snowflake
 def _insert_node_sync(node: GraphNode) -> None:
-    """Insert node into database."""
-    # Convert embedding to JSON array string
-    embedding_json = json.dumps(node.embedding)
-
-    # Use TO_VECTOR(PARSE_JSON()) to properly convert to VECTOR type
+    """
+    Insert node into database.
+    
+    Uses SELECT with EMBED_TEXT_768 - Snowflake handles VECTOR conversion automatically.
+    """
     sql = """
         INSERT INTO nodes (id, text, timestamp, embedding)
-        VALUES (?, ?, ?, TO_VECTOR(PARSE_JSON(?), 768, 'FLOAT'))
+        SELECT
+            %(id)s,
+            %(text)s,
+            %(timestamp)s,
+            SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m-v1.5', %(text_for_embedding)s)
     """
 
-    _execute_non_query(sql, [node.id, node.text, node.timestamp, embedding_json])
+    params = {
+        'id': node.id,
+        'text': node.text,
+        'timestamp': node.timestamp,
+        'text_for_embedding': node.text,
+    }
+
+    _execute_non_query(sql, params)
 
 
 async def insert_node(node: GraphNode) -> None:
@@ -145,17 +157,19 @@ def _insert_edge_sync(edge: GraphEdge) -> None:
     """Insert edge into database."""
     sql = """
         INSERT INTO edges (source, target, score, semantic, keyword, time)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%(source)s, %(target)s, %(score)s, %(semantic)s, %(keyword)s, %(time)s)
     """
 
-    _execute_non_query(sql, [
-        edge.source,
-        edge.target,
-        edge.score,
-        edge.semantic,
-        edge.keyword,
-        edge.time,
-    ])
+    params = {
+        'source': edge.source,
+        'target': edge.target,
+        'score': edge.score,
+        'semantic': edge.semantic,
+        'keyword': edge.keyword,
+        'time': edge.time,
+    }
+
+    _execute_non_query(sql, params)
 
 
 async def insert_edge(edge: GraphEdge) -> None:
@@ -170,7 +184,7 @@ def _fetch_candidates_by_vector_sync(
     exclude_id: str
 ) -> List[CandidateNode]:
     """Fetch candidate nodes via vector similarity search."""
-    # Convert embedding to JSON array string
+    # Convert embedding to JSON for comparison
     embedding_json = json.dumps(embedding)
 
     sql = """
@@ -179,14 +193,23 @@ def _fetch_candidates_by_vector_sync(
             text,
             timestamp,
             embedding,
-            VECTOR_COSINE_SIMILARITY(embedding, TO_VECTOR(PARSE_JSON(?), 768, 'FLOAT')) AS similarity
+            VECTOR_COSINE_SIMILARITY(
+                embedding,
+                PARSE_JSON(%(embedding_json)s)::VECTOR(FLOAT, 768)
+            ) AS similarity
         FROM nodes
-        WHERE id != ?
+        WHERE id != %(exclude_id)s
         ORDER BY similarity DESC
-        LIMIT ?
+        LIMIT %(limit)s
     """
 
-    results = _execute_query(sql, [embedding_json, exclude_id, limit])
+    params = {
+        'embedding_json': embedding_json,
+        'exclude_id': exclude_id,
+        'limit': limit,
+    }
+
+    results = _execute_query(sql, params)
 
     candidates = []
     for row in results:
@@ -216,9 +239,9 @@ async def fetch_candidates_by_vector(
 @async_snowflake
 def _generate_embedding_via_snowflake_sync(text: str) -> List[float]:
     """Generate embedding via Snowflake Cortex."""
-    sql = "SELECT SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m-v1.5', ?) AS embedding"
+    sql = "SELECT SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m-v1.5', %(text)s) AS embedding"
 
-    results = _execute_query(sql, [text])
+    results = _execute_query(sql, {'text': text})
 
     if not results or 'EMBEDDING' not in results[0]:
         raise RuntimeError(f"Failed to generate embedding for text: {text[:50]}...")
@@ -289,8 +312,8 @@ async def get_all_edges() -> List[GraphEdge]:
 @async_snowflake
 def _get_node_by_id_sync(node_id: str) -> Optional[GraphNode]:
     """Fetch specific node by ID."""
-    sql = "SELECT id, text, timestamp, embedding FROM nodes WHERE id = ?"
-    results = _execute_query(sql, [node_id])
+    sql = "SELECT id, text, timestamp, embedding FROM nodes WHERE id = %(id)s"
+    results = _execute_query(sql, {'id': node_id})
 
     if not results:
         return None
@@ -317,9 +340,9 @@ def _get_edges_by_node_id_sync(node_id: str) -> List[GraphEdge]:
     sql = """
         SELECT source, target, score, semantic, keyword, time
         FROM edges
-        WHERE source = ? OR target = ?
+        WHERE source = %(id)s OR target = %(id)s
     """
-    results = _execute_query(sql, [node_id, node_id])
+    results = _execute_query(sql, {'id': node_id})
 
     edges = []
     for row in results:
@@ -352,11 +375,20 @@ def _update_edge_score_sync(
     """Update edge score and breakdown."""
     sql = """
         UPDATE edges
-        SET score = ?, semantic = ?, keyword = ?, time = ?
-        WHERE source = ? AND target = ?
+        SET score = %(score)s, semantic = %(semantic)s, keyword = %(keyword)s, time = %(time)s
+        WHERE source = %(source)s AND target = %(target)s
     """
 
-    _execute_non_query(sql, [score, semantic, keyword, time, source, target])
+    params = {
+        'score': score,
+        'semantic': semantic,
+        'keyword': keyword,
+        'time': time,
+        'source': source,
+        'target': target,
+    }
+
+    _execute_non_query(sql, params)
 
 
 async def update_edge_score(
@@ -374,8 +406,8 @@ async def update_edge_score(
 @async_snowflake
 def _delete_edge_sync(source: str, target: str) -> None:
     """Delete edge from database."""
-    sql = "DELETE FROM edges WHERE source = ? AND target = ?"
-    _execute_non_query(sql, [source, target])
+    sql = "DELETE FROM edges WHERE source = %(source)s AND target = %(target)s"
+    _execute_non_query(sql, {'source': source, 'target': target})
 
 
 async def delete_edge(source: str, target: str) -> None:
@@ -386,8 +418,8 @@ async def delete_edge(source: str, target: str) -> None:
 @async_snowflake
 def _count_edges_for_node_sync(node_id: str) -> int:
     """Count edges for a node (both incoming and outgoing)."""
-    sql = "SELECT COUNT(*) as count FROM edges WHERE source = ? OR target = ?"
-    results = _execute_query(sql, [node_id, node_id])
+    sql = "SELECT COUNT(*) as count FROM edges WHERE source = %(id)s OR target = %(id)s"
+    results = _execute_query(sql, {'id': node_id})
 
     if results:
         return results[0]['COUNT']

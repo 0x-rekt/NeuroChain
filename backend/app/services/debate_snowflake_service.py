@@ -1,5 +1,6 @@
 """
 Debate Snowflake service — Database operations for debate nodes.
+FIXED: Uses Snowflake Cortex embedding function directly (like rag_service repo)
 """
 
 import asyncio
@@ -56,34 +57,46 @@ async def initialize_debate_tables() -> None:
 
 @async_snowflake
 def _insert_debate_node_sync(node: DebateNode) -> None:
-    """Insert debate node into database."""
-    # Convert embedding to JSON array string (same as original backend)
-    embedding_json = json.dumps(node.embedding)
+    """
+    Insert debate node into database.
     
+    Uses the RAG service pattern: Let Snowflake generate embedding directly.
+    """
     merge_history_json = json.dumps([m.model_dump() for m in node.merge_history])
     speakers_json = json.dumps(node.speakers)
 
-    # Use PARSE_JSON like the original backend does
+    # Use SELECT with EMBED_TEXT_768 - Snowflake handles VECTOR conversion automatically
     sql = """
         INSERT INTO debate_nodes (
             id, primary_text, accumulated_text, embedding,
             created_at, last_updated, merge_count,
             merge_history, speakers
         )
-        VALUES (?, ?, ?, TO_VECTOR(PARSE_JSON(?), 768, 'FLOAT'), ?, ?, ?, ?, ?)
+        SELECT
+            %(id)s,
+            %(primary_text)s,
+            %(accumulated_text)s,
+            SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m-v1.5', %(text_for_embedding)s),
+            %(created_at)s,
+            %(last_updated)s,
+            %(merge_count)s,
+            %(merge_history)s,
+            %(speakers)s
     """
 
-    _execute_non_query(sql, [
-        node.id,
-        node.primary_text,
-        node.accumulated_text,
-        embedding_json,
-        node.created_at,
-        node.last_updated,
-        node.merge_count,
-        merge_history_json,
-        speakers_json,
-    ])
+    params = {
+        'id': node.id,
+        'primary_text': node.primary_text,
+        'accumulated_text': node.accumulated_text,
+        'text_for_embedding': node.accumulated_text,  # Use accumulated text for embedding
+        'created_at': node.created_at,
+        'last_updated': node.last_updated,
+        'merge_count': node.merge_count,
+        'merge_history': merge_history_json,
+        'speakers': speakers_json,
+    }
+
+    _execute_non_query(sql, params)
 
 
 async def insert_debate_node(node: DebateNode) -> None:
@@ -93,35 +106,40 @@ async def insert_debate_node(node: DebateNode) -> None:
 
 @async_snowflake
 def _update_debate_node_sync(node: DebateNode) -> None:
-    """Update existing debate node."""
-    # Convert embedding to JSON array string (same as original backend)
-    embedding_json = json.dumps(node.embedding)
+    """
+    Update existing debate node.
     
+    Uses subquery with EMBED_TEXT_768 for embedding update.
+    """
     merge_history_json = json.dumps([m.model_dump() for m in node.merge_history])
     speakers_json = json.dumps(node.speakers)
 
-    # Use PARSE_JSON like the original backend does
+    # Use subquery to generate new embedding
     sql = """
         UPDATE debate_nodes
         SET
-            accumulated_text = ?,
-            embedding = TO_VECTOR(PARSE_JSON(?), 768, 'FLOAT'),
-            last_updated = ?,
-            merge_count = ?,
-            merge_history = ?,
-            speakers = ?
-        WHERE id = ?
+            accumulated_text = %(accumulated_text)s,
+            embedding = (
+                SELECT SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m-v1.5', %(text_for_embedding)s)
+            ),
+            last_updated = %(last_updated)s,
+            merge_count = %(merge_count)s,
+            merge_history = %(merge_history)s,
+            speakers = %(speakers)s
+        WHERE id = %(id)s
     """
 
-    _execute_non_query(sql, [
-        node.accumulated_text,
-        embedding_json,
-        node.last_updated,
-        node.merge_count,
-        merge_history_json,
-        speakers_json,
-        node.id,
-    ])
+    params = {
+        'accumulated_text': node.accumulated_text,
+        'text_for_embedding': node.accumulated_text,  # Use accumulated text for embedding
+        'last_updated': node.last_updated,
+        'merge_count': node.merge_count,
+        'merge_history': merge_history_json,
+        'speakers': speakers_json,
+        'id': node.id,
+    }
+
+    _execute_non_query(sql, params)
 
 
 async def update_debate_node(node: DebateNode) -> None:
@@ -181,10 +199,10 @@ def _get_debate_node_by_id_sync(node_id: str) -> Optional[DebateNode]:
             created_at, last_updated, merge_count,
             merge_history, speakers
         FROM debate_nodes
-        WHERE id = ?
+        WHERE id = %(id)s
     """
     
-    results = _execute_query(sql, [node_id])
+    results = _execute_query(sql, {'id': node_id})
 
     if not results:
         return None
