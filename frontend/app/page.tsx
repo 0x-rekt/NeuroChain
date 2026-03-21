@@ -17,10 +17,52 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isReplayMode, setIsReplayMode] = useState(false);
+  const [newNodeId, setNewNodeId] = useState<string | null>(null);
 
   // Load initial graph data
   useEffect(() => {
     loadGraph();
+  }, []);
+
+  // WebSocket connection for real-time updates
+  useEffect(() => {
+    const wsUrl = process.env.NEXT_PUBLIC_API_URL?.replace("http", "ws") || "ws://localhost:8000";
+    const ws = new WebSocket(`${wsUrl}/ws`);
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "node_created") {
+          // Add new node and edges to graph
+          setGraphData((prev) => ({
+            nodes: [...prev.nodes, data.node],
+            links: [...prev.links, ...data.edges],
+          }));
+
+          // Highlight new node
+          setNewNodeId(data.node.id);
+          setTimeout(() => setNewNodeId(null), 3000);
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket disconnected");
+    };
+
+    return () => {
+      ws.close();
+    };
   }, []);
 
   const loadGraph = async () => {
@@ -134,6 +176,7 @@ export default function Home() {
 
             {/* Controls */}
             <div className="flex gap-2">
+              <ConnectButton />
               <button
                 onClick={handleReplay}
                 disabled={isReplayMode || graphData.nodes.length === 0}
@@ -152,8 +195,6 @@ export default function Home() {
           </div>
         </div>
 
-        <ConnectButton />
-
         {/* Error Message */}
         {error && (
           <div className="mt-3 bg-red-900/50 border border-red-700 text-red-200 px-4 py-2 rounded-lg text-sm">
@@ -168,6 +209,7 @@ export default function Home() {
           data={graphData}
           onNodeClick={handleNodeClick}
           selectedNodeId={selectedNode?.id}
+          newNodeId={newNodeId}
         />
       </div>
 

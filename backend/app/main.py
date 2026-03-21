@@ -9,6 +9,7 @@ from datetime import datetime
 from app.config import settings
 from app.routes.nodes import router as nodes_router
 from app.routes.debate import router as debate_router  # NEW
+from app.routes.websocket import router as websocket_router  # NEW
 from app.services.snowflake_service import initialize_tables
 from app.services.debate_snowflake_service import initialize_debate_tables  # NEW
 from app.services.embedding_service import init_embedding_cache
@@ -86,3 +87,4 @@ async def health_check():
 # Include routers
 app.include_router(nodes_router)
 app.include_router(debate_router)
+app.include_router(websocket_router)

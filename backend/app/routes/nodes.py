@@ -48,6 +48,21 @@ async def create_node(
     return await create_node_handler(text, contributor)
 
 
+@router.post("/api/nodes/", status_code=201)
+async def create_node_from_extension(
+    text: str = Body(...),
+    source: str = Body(None),
+    author_wallet: str = Body(None)
+):
+    """
+    Create a new cognitive graph node from extension input.
+
+    Request body: {"text": "...", "source": "meet_voice|meet_chat", "author_wallet": "..."}
+    Response: {"node": {...}, "edges": [...]}
+    """
+    return await create_node_handler(text)
+
+
 @router.get("/graph")
 async def get_graph():
     """
