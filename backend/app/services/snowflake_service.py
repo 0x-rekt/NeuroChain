@@ -127,7 +127,7 @@ def _insert_node_sync(node: GraphNode) -> None:
 
     sql = """
         INSERT INTO nodes (id, text, timestamp, embedding)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     """
 
     _execute_non_query(sql, [node.id, node.text, node.timestamp, embedding_str])

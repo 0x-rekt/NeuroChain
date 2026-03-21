@@ -69,6 +69,9 @@ async def create_node_handler(text: str) -> CreateNodeResponse:
         await insert_node(node)
         logger.info(f"Node stored: {node.id}")
 
+        # Anchor on blockchain (fire-and-forget)
+        asyncio.create_task(_anchor_on_chain(node.id, node.text, node.embedding))
+
         # 3. Fetch candidate nodes via vector similarity
         candidates = await fetch_candidates_by_vector(
             embedding,
@@ -236,6 +239,3 @@ async def _anchor_on_chain(node_id: str, text: str, embedding: list[float]):
             )
     except Exception as e:
         logger.warning(f"Blockchain anchoring failed (non-fatal): {e}")
-
-# Add this line in create_node_handler after insert_node:
-asyncio.create_task(_anchor_on_chain(node.id, node.text, node.embedding))
