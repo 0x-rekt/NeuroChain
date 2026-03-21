@@ -21,7 +21,7 @@ async def create_node(
     author_wallet: Optional[str] = Body(None),
 ):
     """
-    Create or evolve a thought node with creativity tracking.
+    Create a new cognitive graph node from text input.
 
     This endpoint tracks thought evolution instead of blocking duplicates:
     - Similar thoughts are merged together

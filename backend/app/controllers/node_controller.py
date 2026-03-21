@@ -19,25 +19,6 @@ from app.services.snowflake_service import (
 )
 from app.services.connection_service import create_connections
 from app.services.ci_service import run_ci_pipeline
-from app.services.enhanced_similarity_service import (
-    find_best_match_enhanced,
-)
-from app.services.snowflake_service import (
-    insert_node,
-    update_node,
-    fetch_candidates_by_vector,
-    get_all_nodes,
-    get_all_edges,
-    get_node_by_id,
-    get_edges_by_node_id,
-)
-from app.services.thought_evolution_service import (
-    should_merge_thought,
-    merge_thoughts,
-    create_new_thought,
-    analyze_thought_evolution,
-)
-from app.tasks.workers import trigger_full_graph_reevaluation
 from app.config import settings
 from app.utils.time_utils import now_timestamp
 from app.utils.logger import logger
@@ -48,29 +29,22 @@ import httpx
 
 async def create_node_handler(text: str, source: str = None, contributor: str = None) -> CreateNodeResponse:
     """
-    POST /node — Create or evolve a thought node.
-
-    Instead of blocking duplicates, this endpoint tracks thought evolution:
-    - Similar thoughts are merged together
-    - Evolution history is tracked
-    - Creativity scores are calculated
-    - Contributors are recorded
+    POST /node — Create a new node from text input.
 
     Pipeline:
     1. Generate embedding via Snowflake Arctic
-    2. Find similar thoughts using enhanced similarity
-    3. If similar thought exists: MERGE (track evolution)
-    4. If no similar thought: CREATE new node
-    5. Fetch candidate nodes and create edges
-    6. Trigger CI pipeline and background re-evaluation
-    7. Return node with evolution info
+    2. Store the node in Snowflake
+    3. Fetch candidate nodes via vector similarity search
+    4. Score candidates and create qualifying edges
+    5. Trigger CI pipeline (async, non-blocking)
+    6. Broadcast to WebSocket clients
+    7. Return the new node and its edges
 
     Args:
         text: Input text
-        contributor: Optional contributor identifier (wallet address, username, etc.)
 
     Returns:
-        CreateNodeResponse with node, edges, and evolution info
+        CreateNodeResponse with node and edges
 
     Raises:
         HTTPException: 400 if text is empty, 502 if embedding fails, 500 otherwise
@@ -86,70 +60,29 @@ async def create_node_handler(text: str, source: str = None, contributor: str = 
         # 1. Generate embedding
         embedding = await generate_embedding(trimmed_text)
 
-        # 2. Find similar thoughts using enhanced similarity
-        all_nodes = await get_all_nodes()
-
-        similar_node, similarity_result = find_best_match_enhanced(
-            trimmed_text,
-            embedding,
-            all_nodes,
-            threshold=0.50,  # Lower threshold - we want to track evolution, not block
+        # 2. Create and store node
+        node = GraphNode(
+            id=str(uuid4()),
+            text=trimmed_text,
+            timestamp=now_timestamp(),
+            embedding=embedding,
         )
 
-        node_action = "created"
-        is_evolution = False
-
-        #3. Decide: merge or create?
-        if similar_node and similarity_result:
-            # Check if we should merge
-            should_merge, merge_reason = should_merge_thought(similarity_result)
-
-            if should_merge:
-                # MERGE - Track thought evolution
-                logger.info(
-                    f"Merging thought with {similar_node.id} "
-                    f"(reason: {merge_reason}, "
-                    f"similarity: {similarity_result.composite_score:.3f}, "
-                    f"creativity: {1 - similarity_result.composite_score:.3f})"
-                )
-
-                node = merge_thoughts(
-                    similar_node,
-                    trimmed_text,
-                    embedding,
-                    similarity_result,
-                    contributor,
-                )
-
-                # Update in database
-                await update_node(node)
-                node_action = "merged"
-                is_evolution = True
-            else:
-                # CREATE - Distinct thought
-                logger.info(f"Creating new thought (distinct from existing, reason: {merge_reason})")
-                node = create_new_thought(trimmed_text, embedding, contributor)
-                await insert_node(node)
-        else:
-            # CREATE - First thought or no similar thoughts found
-            logger.info("Creating first thought")
-            node = create_new_thought(trimmed_text, embedding, contributor)
-            await insert_node(node)
-
-        logger.info(f"Thought {node_action}: {node.id}")
+        await insert_node(node)
+        logger.info(f"Node stored: {node.id}")
 
         # Anchor on blockchain (fire-and-forget)
         asyncio.create_task(_anchor_on_chain(node.id, node.text, node.embedding))
 
-        # 5. Fetch candidate nodes via vector similarity for edges
+        # 3. Fetch candidate nodes via vector similarity
         candidates = await fetch_candidates_by_vector(
             embedding,
             settings.candidate_limit,
             node.id
         )
-        logger.info(f"Found{len(candidates)} candidate nodes for edges")
+        logger.info(f"Found {len(candidates)} candidate nodes")
 
-        # 6. Create connections (score + threshold + max-3)
+        # 4. Create connections (score + threshold + max-3)
         edges = await create_connections(
             node,
             candidates,
@@ -159,7 +92,7 @@ async def create_node_handler(text: str, source: str = None, contributor: str = 
         )
         logger.info(f"Created {len(edges)} edges for node {node.id}")
 
-        # 7. Trigger CI pipeline asynchronously (fire-and-forget)
+        # 5. Trigger CI pipeline asynchronously (fire-and-forget)
         asyncio.create_task(run_ci_pipeline(node.id, settings.time_decay_halflife))
 
         # 6. Broadcast to WebSocket clients
@@ -238,7 +171,7 @@ async def create_node_handler(text: str, source: str = None, contributor: str = 
     except HTTPException:
         raise
     except Exception as error:
-        logger.error(f"Failed to process thought: {error}")
+        logger.error(f"Failed to create node: {error}")
 
         # Differentiate embedding failures from other errors
         message = str(error)
