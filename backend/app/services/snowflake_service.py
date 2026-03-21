@@ -124,17 +124,30 @@ async def initialize_tables() -> None:
 @async_snowflake
 def _insert_node_sync(node: GraphNode) -> None:
     """
-    Insert node into database.
-    
+    Insert node into database with evolution tracking fields.
+
     Uses SELECT with EMBED_TEXT_768 - Snowflake handles VECTOR conversion automatically.
     """
+    import json as json_module
+
     sql = """
-        INSERT INTO nodes (id, text, timestamp, embedding)
+        INSERT INTO nodes (
+            id, text, timestamp, embedding,
+            primary_text, accumulated_text, merge_count,
+            evolution_history, contributors, creativity_score, last_updated
+        )
         SELECT
             %(id)s,
             %(text)s,
             %(timestamp)s,
-            SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m-v1.5', %(text_for_embedding)s)
+            SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m-v1.5', %(text_for_embedding)s),
+            %(primary_text)s,
+            %(accumulated_text)s,
+            %(merge_count)s,
+            PARSE_JSON(%(evolution_history)s),
+            PARSE_JSON(%(contributors)s),
+            %(creativity_score)s,
+            %(last_updated)s
     """
 
     params = {
@@ -142,6 +155,13 @@ def _insert_node_sync(node: GraphNode) -> None:
         'text': node.text,
         'timestamp': node.timestamp,
         'text_for_embedding': node.text,
+        'primary_text': node.primary_text or node.text,
+        'accumulated_text': node.accumulated_text or node.text,
+        'merge_count': node.merge_count,
+        'evolution_history': json_module.dumps([e.dict() for e in node.evolution_history]),
+        'contributors': json_module.dumps(node.contributors),
+        'creativity_score': node.creativity_score,
+        'last_updated': node.last_updated or node.timestamp,
     }
 
     _execute_non_query(sql, params)
@@ -150,6 +170,49 @@ def _insert_node_sync(node: GraphNode) -> None:
 async def insert_node(node: GraphNode) -> None:
     """Insert node into database (async)."""
     await _insert_node_sync(node)
+
+
+@async_snowflake
+def _update_node_sync(node: GraphNode) -> None:
+    """
+    Update existing node with evolution tracking data.
+
+    Updates text, embedding, and all evolution fields.
+    """
+    import json as json_module
+
+    sql = """
+        UPDATE nodes
+        SET
+            text = %(text)s,
+            embedding = SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m-v1.5', %(text_for_embedding)s),
+            accumulated_text = %(accumulated_text)s,
+            merge_count = %(merge_count)s,
+            evolution_history = PARSE_JSON(%(evolution_history)s),
+            contributors = PARSE_JSON(%(contributors)s),
+            creativity_score = %(creativity_score)s,
+            last_updated = %(last_updated)s
+        WHERE id = %(id)s
+    """
+
+    params = {
+        'id': node.id,
+        'text': node.text,
+        'text_for_embedding': node.text,
+        'accumulated_text': node.accumulated_text,
+        'merge_count': node.merge_count,
+        'evolution_history': json_module.dumps([e.dict() for e in node.evolution_history]),
+        'contributors': json_module.dumps(node.contributors),
+        'creativity_score': node.creativity_score,
+        'last_updated': node.last_updated,
+    }
+
+    _execute_non_query(sql, params)
+
+
+async def update_node(node: GraphNode) -> None:
+    """Update node in database (async)."""
+    await _update_node_sync(node)
 
 
 @async_snowflake
@@ -262,18 +325,51 @@ async def generate_embedding_via_snowflake(text: str) -> List[float]:
 
 @async_snowflake
 def _get_all_nodes_sync() -> List[GraphNode]:
-    """Fetch all nodes from database."""
-    sql = "SELECT id, text, timestamp, embedding FROM nodes"
+    """Fetch all nodes from database with evolution tracking."""
+    import json as json_module
+
+    sql = """
+        SELECT
+            id, text, timestamp, embedding,
+            primary_text, accumulated_text, merge_count,
+            evolution_history, contributors, creativity_score, last_updated
+        FROM nodes
+    """
     results = _execute_query(sql)
 
     nodes = []
     for row in results:
         embedding_list = row['EMBEDDING'] if isinstance(row['EMBEDDING'], list) else []
+
+        # Parse JSON fields
+        evolution_history_data = row.get('EVOLUTION_HISTORY')
+        evolution_history = []
+        if evolution_history_data:
+            if isinstance(evolution_history_data, str):
+                evolution_history_data = json_module.loads(evolution_history_data)
+            from app.models.node import ThoughtEvolution
+            evolution_history = [ThoughtEvolution(**e) for e in evolution_history_data]
+
+        contributors_data = row.get('CONTRIBUTORS')
+        contributors = []
+        if contributors_data:
+            if isinstance(contributors_data, str):
+                contributors = json_module.loads(contributors_data)
+            else:
+                contributors = contributors_data if isinstance(contributors_data, list) else []
+
         nodes.append(GraphNode(
             id=row['ID'],
             text=row['TEXT'],
             timestamp=row['TIMESTAMP'],
             embedding=embedding_list,
+            primary_text=row.get('PRIMARY_TEXT'),
+            accumulated_text=row.get('ACCUMULATED_TEXT'),
+            merge_count=row.get('MERGE_COUNT', 0),
+            evolution_history=evolution_history,
+            contributors=contributors,
+            creativity_score=row.get('CREATIVITY_SCORE', 0.0),
+            last_updated=row.get('LAST_UPDATED', row['TIMESTAMP']),
         ))
 
     return nodes
@@ -311,8 +407,17 @@ async def get_all_edges() -> List[GraphEdge]:
 
 @async_snowflake
 def _get_node_by_id_sync(node_id: str) -> Optional[GraphNode]:
-    """Fetch specific node by ID."""
-    sql = "SELECT id, text, timestamp, embedding FROM nodes WHERE id = %(id)s"
+    """Fetch specific node by ID with evolution tracking."""
+    import json as json_module
+
+    sql = """
+        SELECT
+            id, text, timestamp, embedding,
+            primary_text, accumulated_text, merge_count,
+            evolution_history, contributors, creativity_score, last_updated
+        FROM nodes
+        WHERE id = %(id)s
+    """
     results = _execute_query(sql, {'id': node_id})
 
     if not results:
@@ -321,11 +426,35 @@ def _get_node_by_id_sync(node_id: str) -> Optional[GraphNode]:
     row = results[0]
     embedding_list = row['EMBEDDING'] if isinstance(row['EMBEDDING'], list) else []
 
+    # Parse JSON fields
+    evolution_history_data = row.get('EVOLUTION_HISTORY')
+    evolution_history = []
+    if evolution_history_data:
+        if isinstance(evolution_history_data, str):
+            evolution_history_data = json_module.loads(evolution_history_data)
+        from app.models.node import ThoughtEvolution
+        evolution_history = [ThoughtEvolution(**e) for e in evolution_history_data]
+
+    contributors_data = row.get('CONTRIBUTORS')
+    contributors = []
+    if contributors_data:
+        if isinstance(contributors_data, str):
+            contributors = json_module.loads(contributors_data)
+        else:
+            contributors = contributors_data if isinstance(contributors_data, list) else []
+
     return GraphNode(
         id=row['ID'],
         text=row['TEXT'],
         timestamp=row['TIMESTAMP'],
         embedding=embedding_list,
+        primary_text=row.get('PRIMARY_TEXT'),
+        accumulated_text=row.get('ACCUMULATED_TEXT'),
+        merge_count=row.get('MERGE_COUNT', 0),
+        evolution_history=evolution_history,
+        contributors=contributors,
+        creativity_score=row.get('CREATIVITY_SCORE', 0.0),
+        last_updated=row.get('LAST_UPDATED', row['TIMESTAMP']),
     )
 
 

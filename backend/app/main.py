@@ -62,7 +62,7 @@ async def startup_event():
 async def root():
     """Root endpoint."""
     return {
-        "service": "Cognitive Graph Engine + Debate Transcription",
+        "service": "Cognitive Graph Engine",
         "version": "2.1.0",
         "status": "running",
         "features": {

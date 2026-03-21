@@ -3,7 +3,7 @@ Types — Supporting types and response models.
 """
 
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 
 class ScoringBreakdown(BaseModel):
@@ -41,9 +41,21 @@ class EdgeResponse(BaseModel):
 
 
 class CreateNodeResponse(BaseModel):
-    """Response for POST /node."""
+    """
+    Response for POST /node with thought evolution tracking.
+
+    Includes information about whether this was a new thought or
+    an evolution of an existing thought.
+    """
     node: NodeResponse
     edges: List[EdgeResponse]
+
+    # Evolution tracking fields
+    action: str = "created"  # "created" | "merged"
+    merge_count: int = 0  # Number of evolutions
+    creativity_score: float = 1.0  # Overall creativity [0, 1]
+    contributors: List[str] = []  # All contributors
+    evolution_analysis: Optional[Dict[str, Any]] = None  # Detailed analysis
 
 
 class GraphResponse(BaseModel):

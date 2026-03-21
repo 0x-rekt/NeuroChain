@@ -14,6 +14,10 @@ from app.models.debate import (
 )
 from app.services.embedding_service import generate_embedding
 from app.services.scoring_service import cosine_similarity
+from app.services.enhanced_similarity_service import (
+    find_best_debate_match_enhanced,
+    compute_enhanced_similarity,
+)
 from app.services.debate_snowflake_service import (
     insert_debate_node,
     update_debate_node,
@@ -26,7 +30,8 @@ from app.config import settings
 
 
 # Merge threshold - if similarity > this, merge instead of create
-MERGE_SIMILARITY_THRESHOLD = 0.75
+# Now using enhanced similarity composite score
+MERGE_SIMILARITY_THRESHOLD = 0.70  # Slightly lower with enhanced similarity
 
 
 async def process_transcription(
@@ -34,49 +39,54 @@ async def process_transcription(
 ) -> TranscriptionResponse:
     """
     Process a new transcription with smart merge logic.
-    
+
     Flow:
     1. Generate embedding for the new text
     2. Find all existing debate nodes
-    3. Compare similarity with each node
+    3. Use enhanced similarity to find best match
     4. If similarity > threshold with any node: MERGE
     5. Otherwise: CREATE new node
-    
+
     Args:
         request: Transcription request
-        
+
     Returns:
         TranscriptionResponse with action taken
     """
     text = request.text.strip()
     speaker = request.speaker
     timestamp = request.timestamp or now_timestamp()
-    
+
     logger.info(f"Processing transcription from {speaker}: {text[:50]}...")
-    
+
     # 1. Generate embedding for new text
     embedding = await generate_embedding(text)
-    
+
     # 2. Get all existing debate nodes
     existing_nodes = await get_all_debate_nodes()
-    
+
     if not existing_nodes:
         # No existing nodes - create first one
         logger.info("No existing nodes, creating first debate node")
         return await _create_new_debate_node(text, speaker, embedding, timestamp)
-    
-    # 3. Find best matching node
-    best_match, best_similarity = await _find_best_match(
+
+    # 3. Find best matching node using enhanced similarity
+    best_match, similarity_result = find_best_debate_match_enhanced(
+        text,
         embedding,
-        existing_nodes
+        existing_nodes,
+        threshold=MERGE_SIMILARITY_THRESHOLD,
     )
-    
+
     # 4. Decide: merge or create?
-    if best_similarity >= MERGE_SIMILARITY_THRESHOLD:
+    if best_match and similarity_result and similarity_result.is_duplicate:
         # MERGE with existing node
         logger.info(
             f"Merging with node {best_match.id} "
-            f"(similarity: {best_similarity:.3f})"
+            f"(confidence: {similarity_result.confidence}, "
+            f"composite: {similarity_result.composite_score:.3f}, "
+            f"semantic: {similarity_result.semantic:.3f}, "
+            f"keyword: {similarity_result.keyword:.3f})"
         )
         return await _merge_into_node(
             best_match,
@@ -84,12 +94,13 @@ async def process_transcription(
             speaker,
             embedding,
             timestamp,
-            best_similarity
+            similarity_result.composite_score
         )
     else:
         # CREATE new node
+        best_score = similarity_result.composite_score if similarity_result else 0.0
         logger.info(
-            f"Creating new node (best similarity: {best_similarity:.3f} "
+            f"Creating new node (best composite similarity: {best_score:.3f} "
             f"< threshold: {MERGE_SIMILARITY_THRESHOLD})"
         )
         return await _create_new_debate_node(text, speaker, embedding, timestamp)
@@ -101,24 +112,28 @@ async def _find_best_match(
 ) -> Tuple[Optional[DebateNode], float]:
     """
     Find the most similar existing node.
-    
+
+    DEPRECATED: Use find_best_debate_match_enhanced instead for full-proof similarity.
+
     Args:
         embedding: New text embedding
         nodes: Existing debate nodes
-        
+
     Returns:
         Tuple of (best_matching_node, similarity_score)
     """
+    logger.warning("Using deprecated _find_best_match. Use find_best_debate_match_enhanced instead.")
+
     best_node = None
     best_score = 0.0
-    
+
     for node in nodes:
         similarity = cosine_similarity(embedding, node.embedding)
-        
+
         if similarity > best_score:
             best_score = similarity
             best_node = node
-    
+
     return best_node, best_score
 
 

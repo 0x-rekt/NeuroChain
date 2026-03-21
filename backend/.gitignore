@@ -23,6 +23,10 @@ ENV/
 *.log
 logs/
 
+# Task Queue
+huey.db
+huey.db-journal
+
 # Testing
 .pytest_cache/
 .coverage
