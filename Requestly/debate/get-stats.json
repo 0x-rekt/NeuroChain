@@ -1,0 +1,20 @@
+{
+  "name": "Get Debate Stats",
+  "request": {
+    "type": "http",
+    "url": "http://localhost:8000/debate/stats",
+    "scripts": {
+      "preRequest": "",
+      "postResponse": ""
+    },
+    "method": "GET",
+    "queryParams": [],
+    "headers": [],
+    "body": [],
+    "contentType": "application/json",
+    "auth": {
+      "currentAuthType": "INHERIT",
+      "authConfigStore": {}
+    }
+  }
+}
