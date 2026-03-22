@@ -9,14 +9,9 @@ interface EdgePanelProps {
 }
 
 export default function EdgePanel({ edge, onClose }: EdgePanelProps) {
-  if (!edge) return null;
-
-  const sourceNode = edge.source as Node;
-  const targetNode = edge.target as Node;
-
   // Calculate confidence level based on overall score
   const confidence = useMemo(() => {
-    const score = edge.score || edge.semantic || 0;
+    const score = edge?.score || edge?.semantic || 0;
     if (score >= 0.75)
       return {
         level: "Strong",
@@ -36,7 +31,12 @@ export default function EdgePanel({ edge, onClose }: EdgePanelProps) {
         bg: "bg-orange-900/20",
       };
     return { level: "Very Weak", color: "text-red-400", bg: "bg-red-900/20" };
-  }, [edge.score, edge.semantic]);
+  }, [edge?.score, edge?.semantic]);
+
+  if (!edge) return null;
+
+  const sourceNode = edge.source as Node;
+  const targetNode = edge.target as Node;
 
   return (
     <div className="absolute top-0 right-0 w-96 h-full bg-gray-900 border-l border-gray-700 overflow-y-auto shadow-2xl">

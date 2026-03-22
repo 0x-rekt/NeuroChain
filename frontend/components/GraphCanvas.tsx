@@ -125,8 +125,10 @@ export default function GraphCanvas({
       const start = link.source;
       const end = link.target;
 
-      // Safety check: ensure start and end have valid coordinates
+      // Safety check: ensure start and end are objects (not strings or numbers) and have valid coordinates
       if (
+        typeof start !== "object" ||
+        typeof end !== "object" ||
         !start ||
         !end ||
         !isFinite(start.x) ||
@@ -148,51 +150,23 @@ export default function GraphCanvas({
       ctx.strokeStyle = `rgba(139, 92, 246, ${alpha})`;
       ctx.lineWidth = 1 / globalScale;
       ctx.stroke();
-    }
 
-    // Draw label
-    ctx.font = `${fontSize}px Sans-Serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#e5e7eb';
-    ctx.fillText(label.substring(0, 30) + (label.length > 30 ? '...' : ''), node.x, node.y + 8);
-  }, [selectedNodeId, newNodeId]);
+      // Draw score label showing overall score
+      const textPos = Object.assign({}, ...["x", "y"].map((c) => ({
+        [c]: start[c] + (end[c] - start[c]) / 2,
+      })));
 
-  const paintLink = useCallback((link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    const start = link.source;
-    const end = link.target;
+      ctx.font = `${10 / globalScale}px Sans-Serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#9ca3af";
 
-    // Safety check: ensure start and end are objects (not strings or numbers) and have valid coordinates
-    if (typeof start !== 'object' || typeof end !== 'object' || !start || !end || !isFinite(start.x) || !isFinite(start.y) || !isFinite(end.x) || !isFinite(end.y)) {
-      return; // Skip rendering if coordinates are invalid
-    }
-
-    // Draw link
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(end.x, end.y);
-
-    // Color based on score (use semantic score for primary color)
-    const semanticScore = link.semantic || link.score || 0;
-    const alpha = Math.min(semanticScore, 1);
-    ctx.strokeStyle = `rgba(139, 92, 246, ${alpha})`;
-    ctx.lineWidth = 1 / globalScale;
-    ctx.stroke();
-
-    // Draw score label showing overall score
-    const textPos = Object.assign({}, ...['x', 'y'].map(c => ({
-      [c]: start[c] + (end[c] - start[c]) / 2
-    })));
-
-    ctx.font = `${10 / globalScale}px Sans-Serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#9ca3af';
-
-    // Show overall score (or semantic if that's the primary)
-    const displayScore = link.score || semanticScore;
-    ctx.fillText((displayScore * 100).toFixed(0) + '%', textPos.x, textPos.y);
-  }, []);
+      // Show overall score (or semantic if that's the primary)
+      const displayScore = link.score || semanticScore;
+      ctx.fillText((displayScore * 100).toFixed(0) + "%", textPos.x, textPos.y);
+    },
+    [],
+  );
 
   return (
     <div className="w-full h-full bg-gray-950">
@@ -217,14 +191,22 @@ export default function GraphCanvas({
           const end = link.target;
 
           // Type guard: ensure start and end are objects (not strings or numbers)
-          if (typeof start !== 'object' || typeof end !== 'object') return;
-          if (!start || !end || !isFinite(start.x!) || !isFinite(start.y!) || !isFinite(end.x!) || !isFinite(end.y!)) return;
+          if (typeof start !== "object" || typeof end !== "object") return;
+          if (
+            !start ||
+            !end ||
+            !isFinite(start.x!) ||
+            !isFinite(start.y!) ||
+            !isFinite(end.x!) ||
+            !isFinite(end.y!)
+          )
+            return;
 
           ctx.strokeStyle = color;
           ctx.lineWidth = 3; // Wider for easier clicking
           ctx.beginPath();
-          ctx.moveTo(start.x, start.y);
-          ctx.lineTo(end.x, end.y);
+          ctx.moveTo(start.x!, start.y!);
+          ctx.lineTo(end.x!, end.y!);
           ctx.stroke();
         }}
         onNodeClick={handleNodeClick}
