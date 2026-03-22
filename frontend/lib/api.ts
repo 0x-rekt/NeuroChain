@@ -1,8 +1,7 @@
 import { CreateNodeResponse, GraphData, Node } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const BLOCKCHAIN_URL =
-  process.env.NEXT_PUBLIC_BLOCKCHAIN_URL || "http://localhost:8001";
+const BLOCKCHAIN_URL = "http://localhost:8001";
 
 // Algorand App IDs (LocalNet Deployment)
 export const APP_IDS = {
@@ -51,15 +50,36 @@ export async function getGraph(): Promise<GraphData> {
 export async function getProof(nodeId: string) {
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000); // 3s timeout
-    const response = await fetch(`${BLOCKCHAIN_URL}/proof/${nodeId}`, {
+    const timer = setTimeout(() => controller.abort(), 5000); // 5s timeout
+    const url = `${BLOCKCHAIN_URL}/proof/${nodeId}`;
+    console.log(`[getProof] Fetching from: ${url}`);
+
+    const response = await fetch(url, {
       signal: controller.signal,
     });
     clearTimeout(timer);
-    if (!response.ok) return null;
-    return response.json();
-  } catch {
-    return null; // blockchain API down = silently show "not anchored"
+
+    if (!response.ok) {
+      console.warn(
+        `[getProof] Non-200 response: ${response.status} ${response.statusText}`,
+      );
+      return null;
+    }
+
+    const data = await response.json();
+    console.log(`[getProof] Success for node ${nodeId}`);
+    return data;
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(
+        `[getProof] Error fetching proof for ${nodeId}:`,
+        error.message,
+      );
+      // Re-throw so the component can handle it
+      throw new Error(`Proof fetch failed: ${error.message}`);
+    }
+    console.error(`[getProof] Unknown error for ${nodeId}`);
+    throw new Error("Failed to fetch proof");
   }
 }
 
