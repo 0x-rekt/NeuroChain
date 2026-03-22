@@ -83,23 +83,30 @@ async def get_debate_node(node_id: str):
 
 
 @router.get("/nodes")
-async def get_all_debate_nodes():
+async def get_all_debate_nodes(session_id: str = Query(..., description="Session ID to filter nodes")):
     """
-    Get all debate nodes.
-    
+    Get all debate nodes for a specific session.
+
+    Query params:
+    - session_id: Required debate session ID (ensures privacy)
+
     Response:
     {
         "nodes": [...],
-        "total": 15
+        "total": 15,
+        "session_id": "uuid"
     }
     """
-    return await get_all_debate_nodes_handler()
+    return await get_all_debate_nodes_handler(session_id)
 
 
 @router.get("/stats")
-async def get_debate_stats():
+async def get_debate_stats(session_id: str = Query(..., description="Session ID to filter stats")):
     """
-    Get debate statistics.
+    Get debate statistics for a specific session.
+
+    Query params:
+    - session_id: Required debate session ID (ensures privacy)
 
     Response:
     {
@@ -107,10 +114,11 @@ async def get_debate_stats():
         "total_merges": 42,
         "unique_speakers": 6,
         "speakers": ["Speaker A", "Speaker B", ...],
-        "avg_merges_per_node": 2.8
+        "avg_merges_per_node": 2.8,
+        "session_id": "uuid"
     }
     """
-    return await get_debate_stats_handler()
+    return await get_debate_stats_handler(session_id)
 
 
 # ==================== SESSION MANAGEMENT ENDPOINTS ====================
@@ -214,13 +222,16 @@ async def get_all_sessions():
 
 
 @router.get("/speaker/{speaker_name}/stats")
-async def get_speaker_stats(speaker_name: str):
+async def get_speaker_stats(speaker_name: str, session_id: str = Query(..., description="Session ID to filter stats")):
     """
-    Get comprehensive statistics for a specific speaker.
+    Get comprehensive statistics for a specific speaker in a session.
 
     Shows credibility and innovation metrics:
     - Credibility: consistency, quality, influence, engagement
     - Innovation: novelty, creativity, diversity, catalyst
+
+    Query params:
+    - session_id: Required debate session ID (ensures privacy)
 
     Response:
     {
@@ -246,15 +257,16 @@ async def get_speaker_stats(speaker_name: str):
         "rank": 2
     }
     """
-    return await get_speaker_stats_handler(speaker_name)
+    return await get_speaker_stats_handler(speaker_name, session_id)
 
 
 @router.get("/leaderboard")
-async def get_leaderboard(limit: int = Query(default=10, ge=1, le=100)):
+async def get_leaderboard(session_id: str = Query(..., description="Session ID to filter leaderboard"), limit: int = Query(default=10, ge=1, le=100)):
     """
-    Get ranked list of top speakers.
+    Get ranked list of top speakers in a session.
 
     Query params:
+    - session_id: Required debate session ID (ensures privacy)
     - limit: Number of speakers to return (1-100, default 10)
 
     Shows speakers ranked by overall score (credibility + innovation).
@@ -281,19 +293,22 @@ async def get_leaderboard(limit: int = Query(default=10, ge=1, le=100)):
         "total": 15
     }
     """
-    return await get_leaderboard_handler(limit)
+    return await get_leaderboard_handler(limit, session_id)
 
 
 @router.get("/topics/analysis")
-async def get_topics_analysis():
+async def get_topics_analysis(session_id: str = Query(..., description="Session ID to filter analysis")):
     """
-    Get comprehensive analysis of all debate topics.
+    Get comprehensive analysis of debate topics in a session.
 
     Categorizes topics by:
     - Top topics (by overall importance)
     - Controversial topics (most debated)
     - Active topics (highest evolution velocity)
     - Diverse topics (most speakers)
+
+    Query params:
+    - session_id: Required debate session ID (ensures privacy)
 
     Each topic includes:
     - Health metrics: controversy, speaker diversity, evolution velocity
@@ -309,16 +324,16 @@ async def get_topics_analysis():
         "diverse_topics": [...]
     }
     """
-    return await get_topics_analysis_handler()
+    return await get_topics_analysis_handler(session_id)
 
 
 @router.get("/conclusion")
-async def get_debate_conclusion(session_id: Optional[str] = Query(default=None)):
+async def get_debate_conclusion(session_id: str = Query(..., description="Session ID to filter conclusion")):
     """
-    Generate comprehensive debate conclusion and analysis.
+    Generate comprehensive debate conclusion and analysis for a session.
 
     Query params:
-    - session_id: Optional debate session ID to filter by
+    - session_id: Required debate session ID (ensures privacy)
 
     Provides:
     - Top speakers (ranked with badges)
@@ -371,14 +386,14 @@ async def get_debate_conclusion(session_id: Optional[str] = Query(default=None))
 
 
 @router.get("/ai-analysis")
-async def get_ai_analysis(session_id: Optional[str] = Query(default=None)):
+async def get_ai_analysis(session_id: str = Query(..., description="Session ID to filter analysis")):
     """
-    Generate AI-powered debate analysis with deep insights and recommendations.
+    Generate AI-powered debate analysis with deep insights and recommendations for a session.
 
     Query params:
-    - session_id: Optional debate session ID to filter by
+    - session_id: Required debate session ID (ensures privacy)
 
-    Uses Snowflake Cortex LLM (llama3.1-70b) to analyze the entire debate.
+    Uses Snowflake Cortex LLM (llama3.1-70b) to analyze the debate.
 
     Unlike /conclusion which provides statistical analysis, this endpoint:
     - Reads and understands the actual debate content

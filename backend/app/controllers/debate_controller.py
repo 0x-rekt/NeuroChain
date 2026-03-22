@@ -127,22 +127,27 @@ async def get_debate_node_handler(node_id: str) -> DebateNodeDetails:
         )
 
 
-async def get_all_debate_nodes_handler() -> dict:
+async def get_all_debate_nodes_handler(session_id: str) -> dict:
     """
     GET /debate/nodes
-    
-    Get all debate nodes (without embeddings).
-    
+
+    Get all debate nodes for a specific session (session isolation).
+
+    Args:
+        session_id: Session ID to filter nodes
+
     Returns:
-        Dict with nodes array
+        Dict with nodes array filtered by session
     """
     try:
-        nodes = await get_all_debate_nodes_list()
-        
+        from app.services.debate_snowflake_service import get_debate_nodes_by_session
+        nodes = await get_debate_nodes_by_session(session_id)
+
         return {
             "nodes": [
                 {
                     "id": node.id,
+                    "session_id": node.session_id,
                     "primary_text": node.primary_text,
                     "accumulated_text": node.accumulated_text,
                     "created_at": node.created_at,
@@ -162,33 +167,38 @@ async def get_all_debate_nodes_handler() -> dict:
                 for node in nodes
             ],
             "total": len(nodes),
+            "session_id": session_id,
         }
-        
+
     except Exception as error:
-        logger.error(f"Failed to fetch debate nodes: {error}")
+        logger.error(f"Failed to fetch debate nodes for session {session_id}: {error}")
         raise HTTPException(
             status_code=500,
             detail=str(error)
         )
 
 
-async def get_debate_stats_handler() -> dict:
+async def get_debate_stats_handler(session_id: str) -> dict:
     """
     GET /debate/stats
-    
-    Get debate statistics.
-    
+
+    Get debate statistics for a specific session (session isolation).
+
+    Args:
+        session_id: Session ID to filter stats
+
     Returns:
-        Dict with stats
+        Dict with stats filtered by session
     """
     try:
-        nodes = await get_all_debate_nodes_list()
-        
+        from app.services.debate_snowflake_service import get_debate_nodes_by_session
+        nodes = await get_debate_nodes_by_session(session_id)
+
         total_merges = sum(node.merge_count for node in nodes)
         all_speakers = set()
         for node in nodes:
             all_speakers.update(node.speakers)
-        
+
         return {
             "total_nodes": len(nodes),
             "total_merges": total_merges,
@@ -197,10 +207,11 @@ async def get_debate_stats_handler() -> dict:
             "avg_merges_per_node": (
                 total_merges / len(nodes) if nodes else 0
             ),
+            "session_id": session_id,
         }
 
     except Exception as error:
-        logger.error(f"Failed to fetch debate stats: {error}")
+        logger.error(f"Failed to fetch debate stats for session {session_id}: {error}")
         raise HTTPException(
             status_code=500,
             detail=str(error)

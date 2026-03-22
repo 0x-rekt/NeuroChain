@@ -21,14 +21,15 @@ from app.services.debate_ai_service import analyze_debate_with_ai
 from app.utils.logger import logger
 
 
-async def get_speaker_stats_handler(speaker_name: str) -> SpeakerStats:
+async def get_speaker_stats_handler(speaker_name: str, session_id: str) -> SpeakerStats:
     """
     GET /debate/speaker/{speaker_name}/stats
 
-    Get comprehensive statistics for a specific speaker.
+    Get comprehensive statistics for a specific speaker in a session (session isolation).
 
     Args:
         speaker_name: Speaker identifier
+        session_id: Session ID to filter stats
 
     Returns:
         SpeakerStats with credibility and innovation metrics
@@ -37,10 +38,11 @@ async def get_speaker_stats_handler(speaker_name: str) -> SpeakerStats:
         HTTPException: 404 if speaker not found, 500 otherwise
     """
     try:
-        logger.info(f"Calculating stats for speaker: {speaker_name}")
+        logger.info(f"Calculating stats for speaker: {speaker_name} in session {session_id}")
 
-        # Get all debate nodes
-        all_nodes = await get_all_debate_nodes_list()
+        # Get debate nodes for this session only
+        from app.services.debate_snowflake_service import get_debate_nodes_by_session
+        all_nodes = await get_debate_nodes_by_session(session_id)
 
         # Check if speaker exists
         all_speakers = set()
@@ -50,7 +52,7 @@ async def get_speaker_stats_handler(speaker_name: str) -> SpeakerStats:
         if speaker_name not in all_speakers:
             raise HTTPException(
                 status_code=404,
-                detail=f"Speaker not found: {speaker_name}"
+                detail=f"Speaker not found in session {session_id}: {speaker_name}"
             )
 
         # Calculate speaker stats
@@ -75,14 +77,15 @@ async def get_speaker_stats_handler(speaker_name: str) -> SpeakerStats:
         )
 
 
-async def get_leaderboard_handler(limit: int = 10) -> dict:
+async def get_leaderboard_handler(limit: int = 10, session_id: str = None) -> dict:
     """
     GET /debate/leaderboard
 
-    Get ranked list of top speakers.
+    Get ranked list of top speakers in a session (session isolation).
 
     Args:
         limit: Number of top speakers to return (default 10)
+        session_id: Session ID to filter speakers
 
     Returns:
         Dict with speakers array and total count
@@ -91,10 +94,11 @@ async def get_leaderboard_handler(limit: int = 10) -> dict:
         HTTPException: 500 on error
     """
     try:
-        logger.info(f"Generating leaderboard (limit: {limit})")
+        logger.info(f"Generating leaderboard for session {session_id} (limit: {limit})")
 
-        # Get all debate nodes
-        all_nodes = await get_all_debate_nodes_list()
+        # Get debate nodes for this session only
+        from app.services.debate_snowflake_service import get_debate_nodes_by_session
+        all_nodes = await get_debate_nodes_by_session(session_id)
 
         # Get all unique speakers
         all_speakers = set()
@@ -138,11 +142,12 @@ async def get_leaderboard_handler(limit: int = 10) -> dict:
                 badge=badge,
             ))
 
-        logger.info(f"Leaderboard generated with {len(rankings)} speakers")
+        logger.info(f"Leaderboard generated with {len(rankings)} speakers for session {session_id}")
 
         return {
             "speakers": rankings,
             "total": len(all_speakers),
+            "session_id": session_id,
         }
 
     except Exception as error:
@@ -153,11 +158,14 @@ async def get_leaderboard_handler(limit: int = 10) -> dict:
         )
 
 
-async def get_topics_analysis_handler() -> dict:
+async def get_topics_analysis_handler(session_id: str) -> dict:
     """
     GET /debate/topics/analysis
 
-    Get analysis of all debate topics.
+    Get analysis of debate topics in a session (session isolation).
+
+    Args:
+        session_id: Session ID to filter topics
 
     Returns:
         Dict with topic stats arrays
@@ -166,10 +174,11 @@ async def get_topics_analysis_handler() -> dict:
         HTTPException: 500 on error
     """
     try:
-        logger.info("Analyzing debate topics")
+        logger.info(f"Analyzing debate topics for session {session_id}")
 
-        # Get all debate nodes
-        all_nodes = await get_all_debate_nodes_list()
+        # Get debate nodes for this session only
+        from app.services.debate_snowflake_service import get_debate_nodes_by_session
+        all_nodes = await get_debate_nodes_by_session(session_id)
 
         # Calculate topic stats for all nodes
         topic_stats_list = [
@@ -205,7 +214,7 @@ async def get_topics_analysis_handler() -> dict:
             reverse=True
         )[:10]
 
-        logger.info(f"Topic analysis completed for {len(all_nodes)} topics")
+        logger.info(f"Topic analysis completed for {len(all_nodes)} topics in session {session_id}")
 
         return {
             "total_topics": len(all_nodes),
@@ -213,24 +222,25 @@ async def get_topics_analysis_handler() -> dict:
             "controversial_topics": controversial_topics,
             "active_topics": active_topics,
             "diverse_topics": diverse_topics,
+            "session_id": session_id,
         }
 
     except Exception as error:
-        logger.error(f"Failed to analyze topics: {error}")
+        logger.error(f"Failed to analyze topics for session {session_id}: {error}")
         raise HTTPException(
             status_code=500,
             detail=str(error)
         )
 
 
-async def get_debate_conclusion_handler(session_id: Optional[str] = None) -> DebateConclusion:
+async def get_debate_conclusion_handler(session_id: str) -> DebateConclusion:
     """
     GET /debate/conclusion
 
-    Generate comprehensive debate conclusion.
+    Generate comprehensive debate conclusion for a session (session isolation).
 
     Args:
-        session_id: Optional debate session ID to filter by
+        session_id: Session ID to filter by
 
     Returns:
         DebateConclusion with full analysis
@@ -239,19 +249,11 @@ async def get_debate_conclusion_handler(session_id: Optional[str] = None) -> Deb
         HTTPException: 500 on error
     """
     try:
-        logger.info(f"Generating debate conclusion (session: {session_id or 'all'})")
+        logger.info(f"Generating debate conclusion for session: {session_id}")
 
-        # Get all debate nodes
-        all_nodes = await get_all_debate_nodes_list()
-
-        # Filter by session if provided
-        # Note: DebateNode model doesn't currently have session_id field
-        # This would need to be added to the model if session filtering is needed
-        if session_id:
-            logger.warning(
-                "Session filtering not yet implemented - returning all nodes. "
-                "Add session_id field to DebateNode model to enable this."
-            )
+        # Get debate nodes for this session only
+        from app.services.debate_snowflake_service import get_debate_nodes_by_session
+        all_nodes = await get_debate_nodes_by_session(session_id)
 
         # Generate conclusion
         conclusion = generate_debate_conclusion(all_nodes)
@@ -266,20 +268,20 @@ async def get_debate_conclusion_handler(session_id: Optional[str] = None) -> Deb
         return conclusion
 
     except Exception as error:
-        logger.error(f"Failed to generate debate conclusion: {error}")
+        logger.error(f"Failed to generate debate conclusion for session {session_id}: {error}")
         raise HTTPException(
             status_code=500,
             detail=str(error)
         )
 
 
-async def get_ai_analysis_handler(session_id: Optional[str] = None) -> dict:
+async def get_ai_analysis_handler(session_id: str) -> dict:
     """
     GET /debate/ai-analysis
 
-    Generate AI-powered debate analysis with insights and recommendations.
+    Generate AI-powered debate analysis with insights and recommendations for a session (session isolation).
 
-    Uses Snowflake Cortex LLM to analyze the entire debate and provide:
+    Uses Snowflake Cortex LLM to analyze the debate and provide:
     - Comprehensive summary
     - Key insights
     - Best stance recommendation
@@ -289,7 +291,7 @@ async def get_ai_analysis_handler(session_id: Optional[str] = None) -> dict:
     - Actionable recommendations
 
     Args:
-        session_id: Optional debate session ID to filter by
+        session_id: Session ID to filter by
 
     Returns:
         Dict with AI-generated analysis
@@ -298,22 +300,16 @@ async def get_ai_analysis_handler(session_id: Optional[str] = None) -> dict:
         HTTPException: 500 on error
     """
     try:
-        logger.info(f"Starting AI-powered debate analysis (session: {session_id or 'all'})")
+        logger.info(f"Starting AI-powered debate analysis for session: {session_id}")
 
-        # Get all debate nodes
-        all_nodes = await get_all_debate_nodes_list()
-
-        # Filter by session if provided
-        if session_id:
-            logger.warning(
-                "Session filtering not yet implemented - analyzing all nodes. "
-                "Add session_id field to DebateNode model to enable this."
-            )
+        # Get debate nodes for this session only
+        from app.services.debate_snowflake_service import get_debate_nodes_by_session
+        all_nodes = await get_debate_nodes_by_session(session_id)
 
         if not all_nodes:
             raise HTTPException(
                 status_code=404,
-                detail="No debate nodes found for analysis"
+                detail=f"No debate nodes found in session {session_id} for analysis"
             )
 
         # Generate AI analysis
