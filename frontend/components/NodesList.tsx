@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { listNodes, NodeListResponse } from '@/lib/api';
 import LoadingSpinner from './LoadingSpinner';
 import { ChevronLeft, ChevronRight, FileText } from 'lucide-react';
-import { Node } from '@/lib/types';
+import { Node as GraphNode } from '@/lib/types';
 
 export default function NodesList() {
   const [data, setData] = useState<NodeListResponse | null>(null);
@@ -15,7 +15,7 @@ export default function NodesList() {
 
   useEffect(() => {
     loadNodes();
-  }, [page]);
+  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadNodes = async () => {
     try {
@@ -89,7 +89,7 @@ export default function NodesList() {
 
       {/* Nodes List */}
       <div className="space-y-2">
-        {data.nodes.map((node: Node) => (
+        {data.nodes.map((node) => (
           <div
             key={node.id}
             className="bg-gray-800 border border-gray-700 rounded-lg p-4 hover:border-purple-600 transition-colors"

@@ -5,6 +5,8 @@ export interface Node {
   timestamp: number;
   hash?: string;
   txId?: string;
+  author_wallet?: string;
+  embedding_norm?: number;
   x?: number;
   y?: number;
   vx?: number;

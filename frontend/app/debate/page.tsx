@@ -105,7 +105,7 @@ export default function DebatePage() {
         setError(null); // Clear error if wallet becomes valid
       }
     }
-  }, [accountAddress, activeSession]);
+  }, [accountAddress, activeSession, validateWalletAccess]);
 
   // Load data based on active tab
   useEffect(() => {
@@ -126,7 +126,7 @@ export default function DebatePage() {
         loadConclusion();
         break;
     }
-  }, [activeTab]);
+  }, [activeTab]); // loadConclusion and other functions are stable, no need to include
 
   // Auto-refresh nodes when on contribute tab
   useEffect(() => {

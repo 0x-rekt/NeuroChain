@@ -1,4 +1,4 @@
-import { CreateNodeResponse, GraphData } from "./types";
+import { CreateNodeResponse, GraphData, Node } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const BLOCKCHAIN_URL =
