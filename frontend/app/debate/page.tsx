@@ -29,16 +29,15 @@ import {
 import Link from 'next/link';
 
 export default function DebatePage() {
+  const { accountAddress, isConnected } = useWallet();
   const [sessionMode, setSessionMode] = useState<'create' | 'join'>('create');
   const [activeSession, setActiveSession] = useState<DebateSessionResponse | null>(null);
-  const [currentWalletAddress, setCurrentWalletAddress] = useState('');
   const [isValidParticipant, setIsValidParticipant] = useState(false);
 
   const [activeTab, setActiveTab] = useState<
     'contribute' | 'nodes' | 'stats' | 'leaderboard' | 'topics' | 'conclusion'
   >('contribute');
 
-  const [walletAddress, setWalletAddress] = useState('');
   const [debateId, setDebateId] = useState('');
 
   // Data states
@@ -97,14 +96,16 @@ export default function DebatePage() {
 
   // Update contributed wallet validation
   useEffect(() => {
-    if (currentWalletAddress && activeSession) {
-      const isValid = validateWalletAccess(currentWalletAddress);
+    if (accountAddress && activeSession) {
+      const isValid = validateWalletAccess(accountAddress);
       setIsValidParticipant(isValid);
       if (!isValid) {
         setError('Your wallet address is not authorized for this debate session');
+      } else {
+        setError(null); // Clear error if wallet becomes valid
       }
     }
-  }, [currentWalletAddress, activeSession]);
+  }, [accountAddress, activeSession]);
 
   // Load data based on active tab
   useEffect(() => {
@@ -225,10 +226,6 @@ export default function DebatePage() {
           response.merge_count ? `Merged ${response.merge_count} times.` : ''
         }`
       );
-
-      // Update wallet address for next contribution
-      setWalletAddress(speaker);
-      setCurrentWalletAddress(speaker);
 
       // Reload nodes
       await loadNodes();
@@ -375,7 +372,6 @@ export default function DebatePage() {
                       onClick={() => {
                         setActiveSession(null);
                         setDebateId('');
-                        setCurrentWalletAddress('');
                       }}
                       className="text-purple-400 hover:text-purple-300 transition-colors"
                     >
@@ -394,7 +390,7 @@ export default function DebatePage() {
                   <div className="font-mono text-xs bg-gray-800 px-3 py-2 rounded border border-gray-700 text-gray-200 break-all">
                     {activeSession.session_id}
                   </div>
-                  {!isValidParticipant && currentWalletAddress && (
+                  {!isValidParticipant && accountAddress && (
                     <p className="text-xs text-red-400 mt-2">⚠️ Wallet not authorized</p>
                   )}
                 </div>
@@ -437,10 +433,17 @@ export default function DebatePage() {
             {activeTab === 'contribute' && (
               <div className="space-y-6">
                 {/* Authorization Check */}
-                {currentWalletAddress && !isValidParticipant && (
+                {accountAddress && !isValidParticipant && (
                   <div className="bg-amber-900/50 border border-amber-700 text-amber-200 px-4 py-3 rounded-lg">
-                    ⚠️ Your wallet address ({currentWalletAddress}) is not registered for this debate session.
+                    ⚠️ Your wallet address ({accountAddress}) is not registered for this debate session.
                     Only the creator and participants can contribute.
+                  </div>
+                )}
+
+                {/* Wallet Connection Check */}
+                {!isConnected && (
+                  <div className="bg-blue-900/50 border border-blue-700 text-blue-200 px-4 py-3 rounded-lg">
+                    ℹ️ Please connect your wallet to contribute to this debate session.
                   </div>
                 )}
 
@@ -448,7 +451,7 @@ export default function DebatePage() {
                 <DebateTranscriptionInput
                   onSubmit={handleSubmitContribution}
                   isLoading={isSubmitting}
-                  currentSpeaker={walletAddress}
+                  currentSpeaker={accountAddress || ''}
                 />
 
                 {/* Recent Contributions */}

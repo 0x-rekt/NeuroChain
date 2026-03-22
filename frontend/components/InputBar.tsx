@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import { useWallet } from '@/lib/WalletContext';
 
 interface InputBarProps {
   onSubmit: (text: string) => void;
@@ -8,6 +9,7 @@ interface InputBarProps {
 }
 
 export default function InputBar({ onSubmit, isLoading = false }: InputBarProps) {
+  const { accountAddress, isConnected } = useWallet();
   const [input, setInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -131,7 +133,12 @@ export default function InputBar({ onSubmit, isLoading = false }: InputBarProps)
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={isRecording ? 'Recording...' : isTranscribing ? 'Transcribing...' : 'Enter your thought or idea...'}
+              placeholder={
+                isRecording ? 'Recording...' :
+                isTranscribing ? 'Transcribing...' :
+                isConnected ? `Enter your thought... (${accountAddress?.slice(0, 6)}...${accountAddress?.slice(-4)})` :
+                'Enter your thought or idea...'
+              }
               disabled={isLoading || isRecording || isTranscribing}
               className="flex-1 bg-gray-800 text-white border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
             />
@@ -191,12 +198,21 @@ export default function InputBar({ onSubmit, isLoading = false }: InputBarProps)
                   clipRule="evenodd"
                 />
               </svg>
-              {isRecording ? 'Recording your voice...' : isTranscribing ? 'Transcribing...' : 'Type or speak your thought'}
+              {isRecording ? 'Recording your voice...' :
+               isTranscribing ? 'Transcribing...' :
+               isConnected ? `Connected to ${accountAddress?.slice(0, 6)}...${accountAddress?.slice(-4)} • Type or speak your thought` :
+               'Connect wallet to associate contributions • Type or speak your thought'}
             </span>
 
             {isRecording && (
               <span className="text-red-400 font-medium animate-pulse">
                 ● REC
+              </span>
+            )}
+
+            {isConnected && !isRecording && !isTranscribing && (
+              <span className="text-green-400 font-medium">
+                ● Connected
               </span>
             )}
           </div>

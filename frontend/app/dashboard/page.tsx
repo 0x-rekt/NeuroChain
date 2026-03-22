@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import GraphCanvas from "@/components/GraphCanvas";
 import NodePanel from "@/components/NodePanel";
 import EdgePanel from "@/components/EdgePanel";
@@ -9,8 +9,19 @@ import { GraphData, Node, Link as GraphLink } from "@/lib/types";
 import { createNode, getGraph } from "@/lib/api";
 import ConnectButton from "@/components/ConnectButton";
 import Link from "next/link";
+import Modal from "@/components/Modal";
+import NodeStats from "@/components/NodeStats";
+import ContributorStats from "@/components/ContributorStats";
+import ContributorsLeaderboard from "@/components/ContributorsLeaderboard";
+import NodesAnalysis from "@/components/NodesAnalysis";
+import NodeConclusion from "@/components/NodeConclusion";
+import NodeAIAnalysis from "@/components/NodeAIAnalysis";
+import NodesList from "@/components/NodesList";
+import { BarChart3, ChevronDown } from "lucide-react";
+import { useWallet } from "@/lib/WalletContext";
 
 export default function Dashboard() {
+  const { accountAddress } = useWallet();
   const [graphData, setGraphData] = useState<GraphData>({
     nodes: [],
     links: [],
@@ -24,16 +35,44 @@ export default function Dashboard() {
   const [isReplayMode, setIsReplayMode] = useState(false);
   const [newNodeId, setNewNodeId] = useState<string | null>(null);
 
+  // Modal states
+  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   // Load initial graph data
   useEffect(() => {
     loadGraph();
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
   // WebSocket connection for real-time updates
   useEffect(() => {
-    const wsUrl =
-      process.env.NEXT_PUBLIC_API_URL?.replace("http", "ws") ||
-      "ws://localhost:8000";
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+    // Determine WebSocket protocol based on page protocol
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+    // Replace http/https with appropriate WebSocket protocol
+    const wsUrl = apiUrl.replace(/^https?:/, wsProtocol);
+
+    console.log('Connecting to WebSocket:', `${wsUrl}/ws`);
     const ws = new WebSocket(`${wsUrl}/ws`);
 
     ws.onopen = () => {
@@ -88,7 +127,8 @@ export default function Dashboard() {
     setError(null);
 
     try {
-      const response = await createNode(text);
+      // Pass the connected wallet address to createNode when available
+      const response = await createNode(text, undefined, accountAddress || undefined);
 
       // Update graph data with new node and connections
       setGraphData((prev) => ({
@@ -103,6 +143,7 @@ export default function Dashboard() {
       // Log evolution info
       console.log("Node added successfully:", {
         id: response.node.id,
+        author_wallet: accountAddress,
         action: response.action,
         creativity_score: response.creativity_score,
         merge_count: response.merge_count,
@@ -207,6 +248,47 @@ export default function Dashboard() {
     setError(null);
   };
 
+  const analyticsActions = [
+    { id: 'stats', label: 'Node Statistics', icon: '📊' },
+    { id: 'list', label: 'All Nodes', icon: '📝' },
+    { id: 'leaderboard', label: 'Contributors Leaderboard', icon: '🏆' },
+    { id: 'contributor', label: 'Contributor Stats', icon: '👤' },
+    { id: 'analysis', label: 'Network Analysis', icon: '🔍' },
+    { id: 'conclusion', label: 'Network Conclusion', icon: '✅' },
+    { id: 'ai-analysis', label: 'AI Analysis', icon: '🤖' },
+  ];
+
+  const handleAnalyticsAction = (actionId: string) => {
+    setActiveModal(actionId);
+    setIsDropdownOpen(false);
+  };
+
+  const getModalTitle = (modalId: string) => {
+    const action = analyticsActions.find(a => a.id === modalId);
+    return action ? action.label : '';
+  };
+
+  const renderModalContent = () => {
+    switch (activeModal) {
+      case 'stats':
+        return <NodeStats />;
+      case 'list':
+        return <NodesList />;
+      case 'leaderboard':
+        return <ContributorsLeaderboard />;
+      case 'contributor':
+        return <ContributorStats />;
+      case 'analysis':
+        return <NodesAnalysis />;
+      case 'conclusion':
+        return <NodeConclusion />;
+      case 'ai-analysis':
+        return <NodeAIAnalysis />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-gray-950">
       {/* Header */}
@@ -239,6 +321,34 @@ export default function Dashboard() {
             {/* Controls */}
             <div className="flex gap-2">
               <ConnectButton />
+
+              {/* Analytics Dropdown */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <BarChart3 size={16} />
+                  Analytics
+                  <ChevronDown size={16} className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-xl overflow-hidden z-50">
+                    {analyticsActions.map((action) => (
+                      <button
+                        key={action.id}
+                        onClick={() => handleAnalyticsAction(action.id)}
+                        className="w-full px-4 py-3 text-left hover:bg-gray-700 transition-colors flex items-center gap-3 text-white"
+                      >
+                        <span className="text-lg">{action.icon}</span>
+                        <span className="text-sm">{action.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <Link
                 href="/debate"
                 className="px-4 py-2 bg-orange-700 hover:bg-orange-600 text-white rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
@@ -294,6 +404,16 @@ export default function Dashboard() {
 
       {/* Input Bar */}
       <InputBar onSubmit={handleAddNode} isLoading={isLoading} />
+
+      {/* Analytics Modal */}
+      <Modal
+        isOpen={activeModal !== null}
+        onClose={() => setActiveModal(null)}
+        title={getModalTitle(activeModal || '')}
+        maxWidth="4xl"
+      >
+        {renderModalContent()}
+      </Modal>
     </div>
   );
 }

@@ -315,3 +315,190 @@ export async function getAIAnalysis(sessionId?: string): Promise<AIAnalysis> {
   if (!response.ok) throw new Error(response.statusText);
   return response.json();
 }
+
+// ==================== NODE ANALYSIS APIs ====================
+
+export interface NodeStats {
+  total_nodes: number;
+  total_evolutions: number;
+  unique_contributors: number;
+  contributors: string[];
+  avg_evolutions_per_node: number;
+  avg_creativity_score: number;
+}
+
+export async function getNodeStats(): Promise<NodeStats> {
+  const response = await fetch(`${API_BASE_URL}/nodes/stats`);
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+export interface ContributorNodeStats {
+  speaker_name: string;
+  total_contributions: number;
+  nodes_created: number;
+  nodes_merged: number;
+  credibility: {
+    consistency_score: number;
+    quality_score: number;
+    influence_score: number;
+    engagement_depth: number;
+    overall_credibility: number;
+  };
+  innovation: {
+    novelty_score: number;
+    creativity_average: number;
+    diversity_score: number;
+    catalyst_score: number;
+    overall_innovation: number;
+  };
+  overall_score: number;
+  rank: number;
+}
+
+export async function getContributorNodeStats(
+  contributorName: string
+): Promise<ContributorNodeStats> {
+  const response = await fetch(
+    `${API_BASE_URL}/nodes/contributor/${encodeURIComponent(contributorName)}/stats`
+  );
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+export interface NodesLeaderboard {
+  contributors: Array<{
+    rank: number;
+    speaker_name: string;
+    overall_score: number;
+    credibility_score: number;
+    innovation_score: number;
+    total_contributions: number;
+    badge: string;
+  }>;
+  total: number;
+}
+
+export async function getNodesLeaderboard(
+  limit: number = 10
+): Promise<NodesLeaderboard> {
+  const response = await fetch(
+    `${API_BASE_URL}/nodes/leaderboard?limit=${Math.min(limit, 100)}`
+  );
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+export interface NodeTopic {
+  node_id: string;
+  primary_text: string;
+  preview_text: string;
+  health: {
+    controversy_score: number;
+    speaker_diversity: number;
+    evolution_velocity: number;
+    engagement_level: number;
+  };
+  dominance: {
+    content_volume: number;
+    time_span_minutes: number;
+    merge_count: number;
+    speaker_count: number;
+    cross_references: number;
+  };
+  speakers: string[];
+  top_contributor: string | null;
+  importance_score: number;
+  rank: number | null;
+}
+
+export interface NodesAnalysis {
+  total_nodes: number;
+  top_nodes: NodeTopic[];
+  high_engagement_nodes: NodeTopic[];
+  active_nodes: NodeTopic[];
+  creative_nodes: NodeTopic[];
+  diverse_nodes: NodeTopic[];
+}
+
+export async function getNodesAnalysis(): Promise<NodesAnalysis> {
+  const response = await fetch(`${API_BASE_URL}/nodes/analysis`);
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+export interface TrendTopic {
+  topic_id: string;
+  topic_preview: string;
+  trend_type: string;
+  velocity: number;
+  speakers_involved: string[];
+  description: string;
+}
+
+export interface NodesConclusion {
+  total_nodes: number;
+  total_contributions: number;
+  unique_speakers: number;
+  debate_duration_minutes: number;
+  top_speakers: Array<{
+    rank: number;
+    speaker_name: string;
+    overall_score: number;
+    badge: string;
+    total_contributions: number;
+  }>;
+  top_topics: NodeTopic[];
+  controversial_topics: NodeTopic[];
+  consensus_topics: NodeTopic[];
+  trends: TrendTopic[];
+  insights: string[];
+  overall_quality_score: number;
+}
+
+export async function getNodesConclusion(): Promise<NodesConclusion> {
+  const response = await fetch(`${API_BASE_URL}/nodes/conclusion`);
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+export interface NodesAIAnalysis {
+  summary: string;
+  key_insights: string[];
+  best_stance?: string;
+  creative_ideas?: string[];
+  synthesis?: string;
+  strongest_arguments?: string[];
+  weakest_arguments?: string[];
+  emerging_patterns?: string[];
+  recommendations: string[];
+  metadata: {
+    total_nodes: number;
+    unique_contributors: number;
+    total_evolutions: number;
+    average_creativity: number;
+    analysis_model: string;
+  };
+}
+
+export async function getNodesAIAnalysis(): Promise<NodesAIAnalysis> {
+  const response = await fetch(`${API_BASE_URL}/nodes/ai-analysis`);
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}
+
+export interface NodeListResponse {
+  nodes: Node[];
+  total: number;
+}
+
+export async function listNodes(
+  limit: number = 50,
+  offset: number = 0
+): Promise<NodeListResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/nodes/?limit=${limit}&offset=${offset}`
+  );
+  if (!response.ok) throw new Error(response.statusText);
+  return response.json();
+}

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useWallet } from '@/lib/WalletContext';
 
 interface DebateTranscriptionInputProps {
   onSubmit: (speaker: string, text: string) => void;
@@ -13,12 +14,20 @@ export default function DebateTranscriptionInput({
   isLoading = false,
   currentSpeaker = '',
 }: DebateTranscriptionInputProps) {
+  const { accountAddress, isConnected } = useWallet();
   const [speaker, setSpeaker] = useState(currentSpeaker);
   const [text, setText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+
+  // Auto-fill speaker field with connected wallet address
+  useEffect(() => {
+    if (isConnected && accountAddress && !speaker) {
+      setSpeaker(accountAddress);
+    }
+  }, [isConnected, accountAddress, speaker]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,14 +116,32 @@ export default function DebateTranscriptionInput({
           <label className="block text-xs font-semibold text-gray-400 mb-2">
             Wallet Address / Speaker ID
           </label>
-          <input
-            type="text"
-            value={speaker}
-            onChange={(e) => setSpeaker(e.target.value)}
-            placeholder="Enter your wallet address or speaker ID..."
-            disabled={isLoading}
-            className="w-full bg-gray-800 text-white border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-          />
+          {isConnected ? (
+            /* Connected wallet - Read only display */
+            <div className="w-full bg-gray-900 text-gray-300 border border-gray-700 rounded-lg px-4 py-2 font-mono text-sm flex items-center justify-between">
+              <span>{accountAddress}</span>
+              <span className="text-xs bg-green-600/30 text-green-300 px-2 py-1 rounded flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+                Connected
+              </span>
+            </div>
+          ) : (
+            /* Not connected - Manual input */
+            <input
+              type="text"
+              value={speaker}
+              onChange={(e) => setSpeaker(e.target.value)}
+              placeholder="Enter your wallet address or speaker ID..."
+              disabled={isLoading}
+              className="w-full bg-gray-800 text-white border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            {isConnected
+              ? 'Your connected wallet address (locked for security)'
+              : 'Connect your wallet for auto-fill and secure identification'
+            }
+          </p>
         </div>
 
         {/* Text Input with Buttons */}
@@ -198,14 +225,24 @@ export default function DebateTranscriptionInput({
                 clipRule="evenodd"
               />
             </svg>
-            {isRecording ? 'Recording your contribution...' : isTranscribing ? 'Transcribing...' : 'Type or speak your contribution'}
+            {isRecording ? 'Recording your contribution...' :
+             isTranscribing ? 'Transcribing...' :
+             isConnected ? `Authenticated as ${accountAddress?.slice(0, 6)}...${accountAddress?.slice(-4)} • Type or speak your contribution` :
+             'Connect wallet for secure authentication • Type or speak your contribution'}
           </span>
 
-          {isRecording && (
-            <span className="text-red-400 font-medium animate-pulse">
-              ● REC
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {isRecording && (
+              <span className="text-red-400 font-medium animate-pulse">
+                ● REC
+              </span>
+            )}
+            {isConnected && !isRecording && !isTranscribing && (
+              <span className="text-green-400 font-medium">
+                ● Authenticated
+              </span>
+            )}
+          </div>
         </div>
       </form>
     </div>
