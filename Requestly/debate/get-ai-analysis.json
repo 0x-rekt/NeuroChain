@@ -1,0 +1,20 @@
+{
+  "name": "Get AI Analysis",
+  "request": {
+    "type": "http",
+    "url": "http://localhost:8000/debate/ai-analysis?session_id=hackathon-2024-debate",
+    "scripts": {
+      "preRequest": "",
+      "postResponse": ""
+    },
+    "method": "GET",
+    "queryParams": [],
+    "headers": [],
+    "body": [],
+    "contentType": "application/json",
+    "auth": {
+      "currentAuthType": "INHERIT",
+      "authConfigStore": {}
+    }
+  }
+}

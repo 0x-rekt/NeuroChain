@@ -1,0 +1,20 @@
+{
+  "name": "Add Debate Transcription",
+  "request": {
+    "type": "http",
+    "url": "http://localhost:8000/debate/transcription",
+    "scripts": {
+      "preRequest": "",
+      "postResponse": ""
+    },
+    "method": "POST",
+    "queryParams": [],
+    "headers": [],
+    "body": "{\"speaker\": \"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb\", \"text\": \"I believe that AI will transform education by providing personalized learning experiences tailored to each student's unique needs and learning pace.\", \"debate_id\": \"hackathon-2024-debate\", \"timestamp\": \"1711075200\"}",
+    "contentType": "application/json",
+    "auth": {
+      "currentAuthType": "INHERIT",
+      "authConfigStore": {}
+    }
+  }
+}

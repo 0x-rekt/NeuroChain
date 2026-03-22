@@ -5,9 +5,10 @@ import GraphCanvas from "@/components/GraphCanvas";
 import NodePanel from "@/components/NodePanel";
 import EdgePanel from "@/components/EdgePanel";
 import InputBar from "@/components/InputBar";
-import { GraphData, Node, Link } from "@/lib/types";
+import { GraphData, Node, Link as GraphLink } from "@/lib/types";
 import { createNode, getGraph } from "@/lib/api";
 import ConnectButton from "@/components/ConnectButton";
+import Link from "next/link";
 
 export default function Home() {
   const [graphData, setGraphData] = useState<GraphData>({
@@ -16,7 +17,7 @@ export default function Home() {
   });
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<
-    (Link & { source: Node; target: Node }) | null
+    (GraphLink & { source: Node; target: Node }) | null
   >(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -236,6 +237,12 @@ export default function Home() {
             {/* Controls */}
             <div className="flex gap-2">
               <ConnectButton />
+              <Link
+                href="/debate"
+                className="px-4 py-2 bg-orange-700 hover:bg-orange-600 text-white rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+              >
+                🎤 Debate Mode
+              </Link>
               <button
                 onClick={handleReplay}
                 disabled={isReplayMode || graphData.nodes.length === 0}

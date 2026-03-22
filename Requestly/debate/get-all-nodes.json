@@ -1,0 +1,20 @@
+{
+  "name": "Get All Debate Nodes",
+  "request": {
+    "type": "http",
+    "url": "http://localhost:8000/debate/nodes",
+    "scripts": {
+      "preRequest": "",
+      "postResponse": ""
+    },
+    "method": "GET",
+    "queryParams": [],
+    "headers": [],
+    "body": [],
+    "contentType": "application/json",
+    "auth": {
+      "currentAuthType": "INHERIT",
+      "authConfigStore": {}
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "Add Similar Debate Transcription (Merge)",
+  "request": {
+    "type": "http",
+    "url": "http://localhost:8000/debate/transcription",
+    "scripts": {
+      "preRequest": "",
+      "postResponse": ""
+    },
+    "method": "POST",
+    "queryParams": [],
+    "headers": [],
+    "body": "{\"speaker\": \"0x9b7d42F4e1d1C9a2B8c3D4e5F6a7B8c9D0e1F2a3\", \"text\": \"AI is revolutionizing education through personalized learning that adapts to individual student requirements and speed of learning.\", \"debate_id\": \"hackathon-2024-debate\", \"timestamp\": \"1711075800\"}",
+    "contentType": "application/json",
+    "auth": {
+      "currentAuthType": "INHERIT",
+      "authConfigStore": {}
+    }
+  }
+}
