@@ -21,13 +21,27 @@ interface ProofData {
 export default function NodePanel({ node, onClose }: NodePanelProps) {
   const [proof, setProof] = useState<ProofData | null>(null);
   const [loadingProof, setLoadingProof] = useState(false);
+  const [proofError, setProofError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!node) return;
     setProof(null);
+    setProofError(null);
     setLoadingProof(true);
+    console.log(`[NodePanel] Fetching proof for node: ${node.id}`);
     getProof(node.id)
-      .then(setProof)
+      .then((proofData) => {
+        if (proofData) {
+          console.log(`[NodePanel] Proof received:`, proofData);
+          setProof(proofData);
+        } else {
+          console.log(`[NodePanel] No proof found for node ${node.id}`);
+        }
+      })
+      .catch((error) => {
+        console.error(`[NodePanel] Error fetching proof:`, error);
+        setProofError(error?.message || "Failed to fetch proof");
+      })
       .finally(() => setLoadingProof(false));
   }, [node]);
 
@@ -90,7 +104,12 @@ export default function NodePanel({ node, onClose }: NodePanelProps) {
             </h3>
             <div className="bg-gray-800 p-2 rounded">
               <p className="text-white font-mono text-xs">
-                [{node.embedding.slice(0, 5).map((v) => v.toFixed(4)).join(", ")}...]
+                [
+                {node.embedding
+                  .slice(0, 5)
+                  .map((v) => v.toFixed(4))
+                  .join(", ")}
+                ...]
               </p>
               <p className="text-gray-500 text-xs mt-1">
                 Dimension: {node.embedding.length}
@@ -114,7 +133,14 @@ export default function NodePanel({ node, onClose }: NodePanelProps) {
             </div>
           )}
 
-          {!loadingProof && !proof && (
+          {!loadingProof && proofError && (
+            <div className="p-4 text-center text-red-400 text-sm bg-red-900/20 border border-red-800 rounded">
+              <p>Error fetching proof</p>
+              <p className="text-xs text-red-300 mt-1">{proofError}</p>
+            </div>
+          )}
+
+          {!loadingProof && !proof && !proofError && (
             <div className="p-4 text-center text-gray-500 text-sm">
               Not yet anchored on-chain
             </div>

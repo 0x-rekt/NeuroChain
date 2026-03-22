@@ -36,8 +36,11 @@ app = FastAPI(title="NeuroChain Blockchain API", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 def get_client() -> LiveProofClient:
@@ -95,6 +98,7 @@ def anchor_proof(req: AnchorRequest):
     """
     Called by the AI backend after creating a node.
     Anchors the proof on Algorand and returns the proof details.
+    If proof already exists, returns success instead of failing (idempotent).
     """
     client = get_client()
     timestamp = int(time.time())
@@ -103,6 +107,7 @@ def anchor_proof(req: AnchorRequest):
     app_id = int(os.getenv("APP_ID", 1002))
 
     try:
+        # Attempt to anchor the proof
         client.send.anchor_proof(
             args=AnchorProofArgs(
                 node_id=req.node_id,
@@ -114,11 +119,25 @@ def anchor_proof(req: AnchorRequest):
                 box_references=[BoxReference(app_id, f"p_{req.node_id}".encode())],
             ),
         )
+        print(f"Node {req.node_id} anchored successfully")
     except Exception as e:
-        print(f"ERROR in anchor_proof: {type(e).__name__}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail=str(e))
+        error_str = str(e).lower()
+        # Check for various indicators that proof already exists:
+        # - "already anchored" message
+        # - Smart contract assertion failure (assert failed pc=...)
+        # - "proof already anchored" message
+        is_duplicate = (
+            "already anchored" in error_str
+            or "proof already anchored" in error_str
+            or ("assert failed" in error_str and "logic eval error" in error_str)
+        )
+
+        if is_duplicate:
+            print(f"Node {req.node_id} already anchored, returning success")
+        else:
+            # Unexpected error - log and fail
+            print(f"ERROR in anchor_proof: {type(e).__name__}: {str(e)}")
+            raise HTTPException(status_code=400, detail=str(e))
 
     return ProofResponse(
         node_id=req.node_id,
