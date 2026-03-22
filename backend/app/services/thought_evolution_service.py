@@ -19,7 +19,7 @@ from app.utils.logger import logger
 
 
 # Similarity thresholds for thought evolution
-MERGE_THRESHOLD_HIGH = 0.80      # Very similar - definitely same thought
+MERGE_THRESHOLD_HIGH = 0.85      # Very similar - definitely same thought
 MERGE_THRESHOLD_MEDIUM = 0.65    # Moderately similar - evolution of same thought
 MERGE_THRESHOLD_LOW = 0.50       # Somewhat similar - related thought
 

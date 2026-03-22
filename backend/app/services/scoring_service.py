@@ -12,9 +12,9 @@ from app.utils.time_utils import time_decay
 
 
 # Scoring weights
-SEMANTIC_WEIGHT = 0.6
-KEYWORD_WEIGHT = 0.2
-TIME_WEIGHT = 0.2
+SEMANTIC_WEIGHT = 0.8
+KEYWORD_WEIGHT = 0.1
+TIME_WEIGHT = 0.1
 
 
 def cosine_similarity(a: List[float], b: List[float]) -> float:
